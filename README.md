@@ -85,7 +85,7 @@ Variables utilisées :
 | `GOOGLE_API_KEY` | Optionnel : alias `vision-model` (Gemini) |
 | `HERMES_LITELLM_BASE_URL` | Optionnel : URL de base OpenAI-compatible vers LiteLLM (défaut `http://litellm:4000/v1`) — injectée dans Hermes comme `CUSTOM_BASE_URL` |
 | `HERMES_LITELLM_API_KEY` | Optionnel : en-tête `Authorization` côté client Hermes→LiteLLM (défaut `dummy` ; aligne avec un éventuel `master_key` LiteLLM) |
-| `HERMES_LITELLM_MODEL` | Optionnel : alias LiteLLM à utiliser (défaut `fast-model`) — `HERMES_INFERENCE_MODEL` dans le conteneur |
+| `HERMES_LITELLM_MODEL` | Optionnel : alias LiteLLM (`fast-model`, `nvidia-llama-3.1-8b`, …) **ou** chaîne complète `nvidia_nim/<id>` (wildcard `nvidia_nim/*` côté proxy ; défaut `fast-model`) |
 | `HERMES_INFERENCE_PROVIDER` | Optionnel : forcé à `custom` par défaut |
 | `HERMES_API_SERVER_KEY` | **Fortement recommandé** en Internet : Bearer pour l’API / UI Hermes (≥ 8 caractères ; ex. `openssl rand -hex 32`) |
 | `HERMES_API_SERVER_ENABLED` | Optionnel : `true` / `false` (défaut `true`) |
@@ -191,13 +191,28 @@ En résumé : **Coolify s’occupe du sous-domaine + SSL** ; pour **qui** peut o
 
 # Changer de modèle
 
-Dans **litellm-config.yaml** : chaîne `model:` côté provider (ex. `openai/minimax-m1`) et alias `model_name` (ex. `fast-model`).
+**Catalogue NVIDIA (même clé `NVIDIA_API_KEY`)** — liste les ids exposés par ton compte :
 
-Dans le **`.env`** : **`HERMES_LITELLM_MODEL`** sur le **même** alias que `model_name` dans LiteLLM (défaut `fast-model`).
+```bash
+curl -sS -H "Authorization: Bearer $NVIDIA_API_KEY" https://integrate.api.nvidia.com/v1/models | jq '.data[].id'
+```
+
+- **N’importe quel modèle** : dans LiteLLM ce dépôt expose une route **wildcard** `nvidia_nim/*`. Côté client (Hermes, curl, Open WebUI, etc.), passe `model` sous la forme **`nvidia_nim/<id>`** (ex. `nvidia_nim/meta/llama-3.1-8b-instruct`). Voir [wildcard routing LiteLLM](https://docs.litellm.ai/docs/wildcard_routing) et [provider NVIDIA NIM](https://docs.litellm.ai/docs/providers/nvidia_nim).
+- **Alias courts** : `fast-model`, `nvidia-llama-3.1-8b`, `nvidia-deepseek-v4-flash`, etc. sont définis dans `litellm-config.yaml` ; tu peux en ajouter sur le même modèle (`model: nvidia_nim/...`, `api_key: os.environ/NVIDIA_API_KEY`).
+
+Dans **`litellm-config.yaml`** (autres providers) : chaîne `model:` et `model_name` comme d’habitude.
+
+Dans le **`.env`** : **`HERMES_LITELLM_MODEL`** = alias LiteLLM ou chaîne complète `nvidia_nim/...` (défaut `fast-model`).
 
 Pour la **fenêtre de contexte** Hermes (≥ 64k requis pour l’agent), modifie `context_length` dans **`hermes-config.yaml`** (pas de variable d’environnement documentée à ce jour).
 
-Exemples possibles :
+Exemples (NVIDIA, préfixe `nvidia_nim/`) :
+
+- `nvidia_nim/meta/llama-3.1-8b-instruct`
+- `nvidia_nim/deepseek-ai/deepseek-v4-flash`
+- `nvidia_nim/mistralai/mixtral-8x7b-instruct-v0.1`
+
+Exemples (autres providers, clés séparées) :
 
 - anthropic/claude-sonnet-4
 - deepseek/deepseek-chat

@@ -1,28 +1,57 @@
 # Secrets : définis les variables dans Coolify ou dans un fichier .env (voir .env.example).
 # Syntaxe LiteLLM : https://docs.litellm.ai/docs/proxy/configs (section « Load API Keys from Environment »)
+# NVIDIA NIM : https://docs.litellm.ai/docs/providers/nvidia_nim — wildcard https://docs.litellm.ai/docs/wildcard_routing
 
 model_list:
 
-  # MODELE PRINCIPAL RAPIDE
+  # Défaut (Hermes : alias « fast-model »)
   - model_name: fast-model
     litellm_params:
-      model: openai/minimax-m1
-      api_base: https://integrate.api.nvidia.com/v1
+      model: nvidia_nim/minimaxai/minimax-m2.7
       api_key: os.environ/NVIDIA_API_KEY
 
-  # MODELE RAISONNEMENT
+  # Tout modèle du catalogue accessible avec ta clé : utiliser model="nvidia_nim/<id>"
+  # où <id> est le champ "id" de GET https://integrate.api.nvidia.com/v1/models (ex. meta/llama-3.1-8b-instruct).
+  # Filtre « Free Endpoint » côté UI : https://build.nvidia.com/models — la facturation / disponibilité peut évoluer.
+  - model_name: "nvidia_nim/*"
+    litellm_params:
+      model: "nvidia_nim/*"
+      api_key: os.environ/NVIDIA_API_KEY
+
+  # Alias pratiques (même clé NVIDIA) — tu peux en ajouter ou les retirer
+  - model_name: nvidia-llama-3.1-8b
+    litellm_params:
+      model: nvidia_nim/meta/llama-3.1-8b-instruct
+      api_key: os.environ/NVIDIA_API_KEY
+
+  - model_name: nvidia-deepseek-v4-flash
+    litellm_params:
+      model: nvidia_nim/deepseek-ai/deepseek-v4-flash
+      api_key: os.environ/NVIDIA_API_KEY
+
+  - model_name: nvidia-mistral-7b
+    litellm_params:
+      model: nvidia_nim/mistralai/mistral-7b-instruct-v0.3
+      api_key: os.environ/NVIDIA_API_KEY
+
+  - model_name: nvidia-nemotron-340b
+    litellm_params:
+      model: nvidia_nim/nvidia/nemotron-4-340b-instruct
+      api_key: os.environ/NVIDIA_API_KEY
+
+  # MODELE RAISONNEMENT (non NVIDIA)
   - model_name: reasoning-model
     litellm_params:
       model: anthropic/claude-sonnet-4
       api_key: os.environ/ANTHROPIC_API_KEY
 
-  # MODELE CODE
+  # MODELE CODE (non NVIDIA)
   - model_name: code-model
     litellm_params:
       model: deepseek/deepseek-chat
       api_key: os.environ/DEEPSEEK_API_KEY
 
-  # MODELE VISION
+  # MODELE VISION (non NVIDIA)
   - model_name: vision-model
     litellm_params:
       model: gemini/gemini-2.5-pro
