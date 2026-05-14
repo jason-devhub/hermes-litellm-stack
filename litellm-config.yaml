@@ -1,0 +1,29 @@
+# Secrets : définis les variables dans Coolify ou dans un fichier .env (voir .env.example).
+# Syntaxe LiteLLM : https://docs.litellm.ai/docs/proxy/configs (section « Load API Keys from Environment »)
+
+model_list:
+
+  # MODELE PRINCIPAL RAPIDE
+  - model_name: fast-model
+    litellm_params:
+      model: openai/minimax-m1
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+
+  # MODELE RAISONNEMENT
+  - model_name: reasoning-model
+    litellm_params:
+      model: anthropic/claude-sonnet-4
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # MODELE CODE
+  - model_name: code-model
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  # MODELE VISION
+  - model_name: vision-model
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GOOGLE_API_KEY

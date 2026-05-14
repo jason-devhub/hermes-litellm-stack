@@ -1,0 +1,8 @@
+# Hermes uniquement : schéma différent de litellm-config.yaml (fusion impossible).
+# URL / clé / modèle côté LiteLLM : .env → docker-compose (voir HERMES_LITELLM_*).
+# « default » sert de repli ; en pratique HERMES_INFERENCE_MODEL (injecté par compose) prime.
+
+model:
+  provider: custom
+  default: fast-model
+  context_length: 131072
