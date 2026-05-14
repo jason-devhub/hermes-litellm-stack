@@ -55,6 +55,12 @@ services:
       # Si tu changes HERMES_API_SERVER_PORT, adapte aussi le port à droite (conteneur).
       - "${HERMES_PUBLISH_PORT:-8642}:${HERMES_API_SERVER_PORT:-8642}"
 
+    # Basic Auth devant Hermes (Coolify / Traefik). Sans HERMES_BASIC_AUTH_USERS, commente ce bloc ou définis la variable (voir README / .env.example).
+    # https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth#docker-compose-and-services
+    labels:
+      - "traefik.http.middlewares.hermes-basicauth.basicauth.users=${HERMES_BASIC_AUTH_USERS}"
+      - "coolify.traefik.middlewares=hermes-basicauth"
+
     environment:
       # Hermes → LiteLLM (surcharge .env / Coolify ; voir README « Deux fichiers YAML »)
       CUSTOM_BASE_URL: ${HERMES_LITELLM_BASE_URL:-http://litellm:4000/v1}
