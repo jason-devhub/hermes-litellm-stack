@@ -166,6 +166,8 @@ Si tu as défini `HERMES_API_SERVER_KEY`, les clients doivent envoyer cette vale
 
 Open WebUI est ajouté comme interface web devant Hermes. Dans Coolify, rattache un domaine au service **`open-webui`** avec le port interne **`8080`** (ex. domaine configuré comme `https://chat.example.com:8080` côté Coolify, puis accès navigateur via `https://chat.example.com`).
 
+Le Basic Auth Traefik est appliqué sur **`open-webui`** via `OPENWEBUI_BASIC_AUTH_USERS`. Hermes et LiteLLM ne publient plus de ports hôte : ils restent accessibles uniquement depuis le réseau Docker de la stack.
+
 La connexion Hermes est préconfigurée côté Open WebUI avec :
 
 - `OPENAI_API_BASE_URLS=http://hermes:8642/v1`
@@ -185,7 +187,7 @@ Ce que tu peux faire, par ordre de robustesse :
 
 2. **Couche devant l’app (recommandé en plus)** — Coolify, Traefik, Caddy ou nginx : **TLS**, éventuellement **SSO / basic auth** (Authelia, Authentik, accès Cloudflare, etc.). C’est souvent ce qu’on entend par « sécuriser l’interface » pour une app sans login intégré.
 
-3. **Réseau** — Ne pas publier LiteLLM sur Internet : dans `docker-compose.yml`, tu peux **commenter** `4000:4000` pour que seul le réseau Docker (Hermes → LiteLLM) y accède.
+3. **Réseau** — LiteLLM et Hermes ne publient pas de ports hôte dans ce compose ; Open WebUI parle à Hermes via le réseau Docker interne, et Hermes parle à LiteLLM de la même façon.
 
 4. **LiteLLM** — Si le port `4000` reste exposé, configure un `master_key` côté LiteLLM (voir doc proxy) pour éviter qu’un tiers n’utilise ton proxy et donc tes quotas / facturation.
 
@@ -195,15 +197,15 @@ Ce que tu peux faire, par ordre de robustesse :
 
 - **Port interne Hermes** — L’URL publique reste bien `https://hermes.example.com` sans `:8642`. Le port `8642` est seulement le port **interne conteneur** vers lequel Coolify/Traefik route le trafic. `Dockerfile.hermes` déclare donc `EXPOSE 8642` pour que Coolify sache quel backend utiliser dans une stack Docker Compose.
 
-- **Authentification « devant » Hermes** — Le plus courant est de la mettre **au proxy**, pas dans Hermes lui-même :
+- **Authentification « devant » Open WebUI** — Le plus courant est de la mettre **au proxy**, en plus de l’auth propre d’Open WebUI :
 
-  1. **[Basic Auth (Traefik)](https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth)** — Ce dépôt inclut déjà des **labels** sur le service **`hermes`** dans `docker-compose.yml` ([section *Docker Compose And Services*](https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth#docker-compose-and-services)) : middleware `hermes-basicauth` + raccourci **`coolify.traefik.middlewares=hermes-basicauth`** pour l’injecter dans la chaîne du routeur Coolify. Renseigne **`HERMES_BASIC_AUTH_USERS`** dans l’onglet **Environment** (valeur = sortie de `htpasswd -nbB user pass`, une ligne `user:hash`). Dans un fichier `.env`, **double chaque `$`** du hash (`$` → `$$`) pour éviter que Compose ne les mange. Si tu ne veux pas Basic Auth, **commente le bloc `labels:`** du service `hermes` avant de déployer (sinon une variable vide peut poser problème côté Traefik). Voir aussi la doc Coolify sur les caractères spéciaux dans les labels.
+  1. **[Basic Auth (Traefik)](https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth)** — Ce dépôt inclut des **labels** sur le service **`open-webui`** dans `docker-compose.yml` ([section *Docker Compose And Services*](https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth#docker-compose-and-services)) : middleware `openwebui-basicauth` + raccourci **`coolify.traefik.middlewares=openwebui-basicauth`** pour l’injecter dans la chaîne du routeur Coolify. Renseigne **`OPENWEBUI_BASIC_AUTH_USERS`** dans l’onglet **Environment** (valeur = sortie de `htpasswd -nbB user pass`, une ligne `user:hash`). Dans un fichier `.env`, **double chaque `$`** du hash (`$` → `$$`) pour éviter que Compose ne les mange.
 
   2. **SSO / OAuth** — Par exemple [protection avec Authentik (forward auth)](https://coolify.io/docs/knowledge-base/proxy/traefik/protect-services-with-authentik) devant Traefik, ou un équivalent (Authelia, **Cloudflare Access**, etc.) si tu préfères gérer l’accès hors Coolify.
 
 - **En complément** — Définir **`HERMES_API_SERVER_KEY`** (Bearer côté Hermes) : barrière côté application en plus du proxy.
 
-En résumé : **Coolify s’occupe du sous-domaine + SSL** ; pour **qui** peut ouvrir l’URL, ajoute **Basic Auth ou SSO au niveau Traefik** (ou l’équivalent documenté pour ta version de Coolify), et garde Hermes/LiteLLM non exposés inutilement sur des ports publics bruts.
+En résumé : **Coolify s’occupe du sous-domaine + SSL** ; expose le service **`open-webui`** uniquement, ajoute **Basic Auth ou SSO au niveau Traefik**, et garde Hermes/LiteLLM non exposés sur des ports publics bruts.
 
 ---
 
