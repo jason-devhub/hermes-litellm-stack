@@ -94,5 +94,31 @@ services:
       retries: 10
       start_period: 180s
 
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+
+    container_name: open-webui
+
+    restart: unless-stopped
+
+    depends_on:
+      hermes:
+        condition: service_healthy
+
+    # Port interne pour Coolify/Traefik : configure le domaine du service en https://ton-domaine:8080.
+    expose:
+      - "8080"
+
+    environment:
+      WEBUI_NAME: ${OPENWEBUI_NAME:-Hermes Agent}
+      WEBUI_AUTH: "${OPENWEBUI_AUTH:-true}"
+      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:-}
+      OPENAI_API_BASE_URLS: ${OPENWEBUI_OPENAI_API_BASE_URLS:-http://hermes:8642/v1}
+      OPENAI_API_KEYS: ${OPENWEBUI_OPENAI_API_KEYS:-${HERMES_API_SERVER_KEY:-}}
+
+    volumes:
+      - open_webui_data:/app/backend/data
+
 volumes:
   hermes_data:
+  open_webui_data:

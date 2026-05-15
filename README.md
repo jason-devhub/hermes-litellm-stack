@@ -137,7 +137,8 @@ docker compose up -d
 Cela démarre :
 
 - **LiteLLM** sur le port `4000` (API compatible OpenAI, utilisée en interne par Hermes)
-- **Hermes** sur le port `8642` (interface web)
+- **Hermes** sur le port `8642` (API OpenAI-compatible pour l’agent)
+- **Open WebUI** sur le port interne `8080` (interface web connectée à Hermes)
 
 Vérifier que les conteneurs tournent :
 
@@ -155,11 +156,22 @@ docker compose logs -f
 
 # Accéder à Hermes
 
-Par défaut :
+Par défaut, Hermes expose surtout une API OpenAI-compatible :
 
 http://IP_DU_VPS:8642
 
-Si tu as défini `HERMES_API_SERVER_KEY`, l’interface ou les clients doivent envoyer cette valeur en en-tête `Authorization: Bearer …` (comportement type API OpenAI). Vérifie le comportement exact sur ton build d’Hermes.
+Si tu as défini `HERMES_API_SERVER_KEY`, les clients doivent envoyer cette valeur en en-tête `Authorization: Bearer …` (comportement type API OpenAI). Le endpoint principal pour les frontends est `/v1`.
+
+## Accéder à Open WebUI
+
+Open WebUI est ajouté comme interface web devant Hermes. Dans Coolify, rattache un domaine au service **`open-webui`** avec le port interne **`8080`** (ex. domaine configuré comme `https://chat.example.com:8080` côté Coolify, puis accès navigateur via `https://chat.example.com`).
+
+La connexion Hermes est préconfigurée côté Open WebUI avec :
+
+- `OPENAI_API_BASE_URLS=http://hermes:8642/v1`
+- `OPENAI_API_KEYS=${HERMES_API_SERVER_KEY}` (ou `OPENWEBUI_OPENAI_API_KEYS` si tu veux surcharger)
+
+Open WebUI persiste sa configuration dans le volume `open_webui_data`. Après le premier démarrage, certaines valeurs modifiées dans l’admin UI peuvent primer sur les variables d’environnement.
 
 ---
 
