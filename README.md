@@ -107,7 +107,7 @@ Variables utilisées :
 | `HERMES_CORS_ORIGINS` | Optionnel : origines CORS pour l’UI (ex. `https://hermes.tondomaine.net`). Défaut `*` (pratique en dev, à resserrer en prod) |
 | `HERMES_UID` / `HERMES_GID` | Optionnel : propriétaire du volume partagé (défaut **10010**, aligné sur Hermes Workspace) |
 | `HERMES_PASSWORD` | **Obligatoire** : mot de passe de session Hermes Workspace (l’UI refuse de démarrer sur `0.0.0.0` sans secret) |
-| `HERMES_WORKSPACE_COOKIE_SECURE` | `0` si tu ouvres l’UI en **http://** (IP, LAN) ; `1` + `TRUST_PROXY=1` derrière **Coolify/HTTPS** |
+| `HERMES_WORKSPACE_COOKIE_SECURE` | Défaut **`0`** dans `docker-compose.yml` ; mets **`1`** + `TRUST_PROXY=1` derrière **Coolify/HTTPS** |
 | `HERMES_WORKSPACE_TRUST_PROXY` | `1` uniquement derrière un reverse proxy de confiance (Coolify, Traefik) |
 
 En local, copie le modèle puis renseigne les valeurs :
@@ -258,7 +258,7 @@ Le log ressemble à :
 | `http://IP` ou `http://…:3000` (sans TLS) | `HERMES_WORKSPACE_COOKIE_SECURE=0` |
 | `https://chat.tondomaine.com` via Coolify / Traefik | `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1` |
 
-Par défaut, ce dépôt **ne force plus** `COOKIE_SECURE` ni `TRUST_PROXY` (comme le [compose officiel](https://github.com/outsourc-e/hermes-workspace/blob/main/docker-compose.yml)) : l’UI peut auto-détecter le contexte. En pratique, fixe explicitement `0` ou `1` selon le tableau ci-dessus.
+Par défaut, `docker-compose.yml` envoie **`COOKIE_SECURE=0`** au workspace (login OK en `http://`). Pour Coolify en HTTPS, surcharge avec `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1`.
 
 Après changement :
 

@@ -118,8 +118,8 @@ services:
       HERMES_DASHBOARD_URL: http://hermes:${HERMES_DASHBOARD_PORT:-9119}
       HERMES_API_TOKEN: ${HERMES_API_SERVER_KEY:-}
       HERMES_PASSWORD: ${HERMES_PASSWORD:-}
-      # Non défini par défaut : l’UI détecte HTTP vs HTTPS (voir #149). En LAN http:// → 0 ; derrière Coolify HTTPS → 1.
-      COOKIE_SECURE: ${HERMES_WORKSPACE_COOKIE_SECURE:-}
+      # Défaut 0 : cookies utilisables en http:// (#149). Derrière Coolify HTTPS → HERMES_WORKSPACE_COOKIE_SECURE=1
+      COOKIE_SECURE: ${HERMES_WORKSPACE_COOKIE_SECURE:-0}
       TRUST_PROXY: ${HERMES_WORKSPACE_TRUST_PROXY:-}
 
     volumes:
