@@ -180,6 +180,38 @@ Consulter les journaux en cas de problème :
 docker compose logs -f
 ```
 
+## Dépannage : `APITimeoutError` sur `http://litellm:4000/v1` / `fast-model`
+
+Message typique côté Hermes :
+
+```
+API call failed (attempt 1/3): APITimeoutError
+Provider: custom  Model: fast-model
+Endpoint: http://litellm:4000/v1
+Error: Request timed out.
+```
+
+| Cause | Vérification | Correctif |
+| --- | --- | --- |
+| **`NVIDIA_API_KEY` vide ou absente** | `docker compose exec litellm printenv NVIDIA_API_KEY` doit afficher `nvapi-...` | Clé sur [build.nvidia.com](https://build.nvidia.com) → `.env` ou Coolify → `NVIDIA_API_KEY` → `docker compose up -d --build` |
+| **`HERMES_API_SERVER_KEY` vide** | `docker compose logs hermes` → `binding to 0.0.0.0 requires API_SERVER_KEY` | `openssl rand -hex 32` → `HERMES_API_SERVER_KEY=...` dans `.env` |
+| **Modèle NVIDIA lent (cold start)** | `docker compose logs litellm` pendant un chat ; premier appel > 2 min | Défaut `fast-model` = Llama 3.1 8B ; ou `HERMES_LITELLM_MODEL=nvidia-llama-3.1-8b` ; timeouts `HERMES_STREAM_READ_TIMEOUT` / `HERMES_API_CALL_STALE_TIMEOUT` déjà relevés dans `docker-compose.yml` |
+| **LiteLLM injoignable** | `docker compose ps` → `litellm` doit être `healthy` | `docker compose logs litellm` ; sans clé NVIDIA le conteneur refuse de démarrer (message explicite au boot) |
+
+Test rapide depuis le réseau Docker :
+
+```bash
+docker compose exec litellm python3 -c "
+import json, urllib.request
+r = urllib.request.Request('http://127.0.0.1:4000/v1/chat/completions',
+  data=json.dumps({'model':'fast-model','messages':[{'role':'user','content':'hi'}],'max_tokens':5}).encode(),
+  headers={'Content-Type':'application/json'}, method='POST')
+print(urllib.request.urlopen(r, timeout=120).read().decode()[:300])
+"
+```
+
+Si la clé NVIDIA est valide, tu dois voir une réponse JSON avec `"choices"`. Sinon LiteLLM renvoie une erreur 500 avec `Missing credentials` ou `Nvidia_nimException` dans les logs.
+
 ---
 
 # Accéder à Hermes
