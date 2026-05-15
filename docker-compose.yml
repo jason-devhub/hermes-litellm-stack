@@ -17,15 +17,18 @@ services:
     environment:
       # Injectées par Coolify, un .env local, ou export avant `docker compose up`
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      # LiteLLM récent attend aussi ce nom pour nvidia_nim (health + appels)
+      NVIDIA_NIM_API_KEY: ${NVIDIA_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
 
+    # /health/liveliness = process vivant (JSON "I'm alive!"). /health teste tous les modèles (lent, peut bloquer le déploiement).
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=5).read()\"",
+          "python3 -c \"import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=5); json.loads(r.read().decode())\"",
         ]
       interval: 15s
       timeout: 10s
