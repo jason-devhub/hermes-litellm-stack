@@ -1,15 +1,14 @@
 services:
 
   litellm:
-    image: ghcr.io/berriai/litellm:main
+    build:
+      context: .
+      dockerfile: Dockerfile.litellm
+    image: hermes-litellm-proxy:latest
 
     container_name: litellm
 
     restart: unless-stopped
-
-    command:
-      - "--config"
-      - "/app/config.yaml"
 
     ports:
       # En production : commenter la ligne suivante si seul Hermes doit joindre LiteLLM (réseau Docker interne).
@@ -22,14 +21,11 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
 
-    volumes:
-      - ./litellm-config.yaml:/app/config.yaml
-
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=5).read()\"",
+          "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health', timeout=5).read()\"",
         ]
       interval: 5m
       timeout: 5s
