@@ -8,11 +8,19 @@ Installation simple de Hermes AI avec :
 
 # Architecture
 
-Hermes
-↓
-LiteLLM
-↓
-NVIDIA API
+```
+Navigateur
+    ↓  (HTTPS via Coolify, ou http:// en LAN)
+Hermes Workspace  :3000   ← interface web (outsourc-e)
+    ↓  réseau Docker
+Hermes Agent      :8642   ← gateway (API, chat, outils)
+    ↓                  :9119 ← dashboard (sessions, skills, jobs)
+LiteLLM           :4000   ← proxy multi-modèles
+    ↓
+NVIDIA API (ou autres providers)
+```
+
+**Hermes Agent** (Nous Research) est le moteur. **Hermes Workspace** est une surcouche UI qui s’y branche — ce n’est pas une autre version de l’agent. Ce dépôt installe les deux ; Open WebUI a été retiré.
 
 ---
 
@@ -110,7 +118,16 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Docker Compose transmet ces variables aux services `litellm` et `hermes` (voir `docker-compose.yml`).
+Docker Compose transmet ces variables aux services `litellm`, `hermes` et `hermes-workspace` (voir `docker-compose.yml`).
+
+Exemple minimal `.env` pour Hermes Workspace :
+
+```bash
+NVIDIA_API_KEY=nvapi-...
+HERMES_API_SERVER_KEY=...          # openssl rand -hex 32
+HERMES_PASSWORD=...                # mot de passe UI Workspace
+HERMES_WORKSPACE_COOKIE_SECURE=0   # 0 en http:// LAN ; 1 derrière Coolify HTTPS
+```
 
 ## Déploiement Coolify
 
@@ -193,18 +210,127 @@ Vérification rapide :
 ```bash
 docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8642/health').read())"
 docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9119/api/status').read())"
+docker compose logs hermes-workspace 2>&1 | tail -30
 ```
 
-**Login impossible / warning `plain-HTTP LAN` / erreur 500 au chargement :** en accès **http://** direct, définis `HERMES_WORKSPACE_COOKIE_SECURE=0` (sinon le navigateur rejette les cookies `Secure` en production). Derrière **Coolify en HTTPS**, utilise plutôt `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1`. Le message `CLAUDE_DASHBOARD_TOKEN` est un avertissement de dépréciation : le workspace récupère encore le token du dashboard via HTML ; tu peux l’ignorer tant que `enhanced=[sessions, skills, …]` apparaît dans les logs.
+Voir la section [Dépannage Hermes Workspace](#dépannage-hermes-workspace) pour les erreurs courantes (cookies, permissions, logs).
 
-**Erreur `EACCES` sur `/home/workspace/.hermes/config.yaml` :** l’agent et le workspace partagent le volume `hermes_data`. L’UI tourne en UID **10010** ; sans `HERMES_UID=10010`, l’agent écrit en **10000** et le workspace ne peut pas modifier la config. Ce dépôt fixe `HERMES_UID` / `HERMES_GID` à `10010` sur le service `hermes`. Après mise à jour, redémarre pour que l’entrypoint refasse le `chown` du volume :
+---
+
+# Dépannage Hermes Workspace
+
+## Lire les logs au démarrage
+
+Au lancement, le conteneur `hermes-workspace` affiche en général :
+
+```
+[gateway] gateway=http://hermes:8642 dashboard=http://hermes:9119 mode=zero-fork
+  core=[health, chatCompletions, models, streaming, dashboard]
+  enhanced=[sessions, skills, memory, config, jobs]
+  missing=[enhancedChat, mcp, mcpFallback]
+```
+
+| Message | Signification |
+| --- | --- |
+| `mode=zero-fork` | L’UI utilise un agent Nous Research « vanilla », sans fork — comportement attendu. |
+| `enhanced=[sessions, skills, memory, config, jobs]` | Connexion OK au gateway **et** au dashboard : mémoire, skills, réglages, etc. disponibles. |
+| `missing=[enhancedChat, mcp, …]` | Fonctions optionnelles absentes côté agent ; le chat de base fonctionne quand même. |
+| `[claude-api] Configured API: http://hermes:8642` | Le workspace pointe bien vers le bon service Docker (`hermes`, pas `localhost`). |
+
+Si `enhanced` est vide ou le mode retombe en « portable », le dashboard (`:9119`) ou le gateway (`:8642`) n’est pas joignable — vérifie `docker compose ps` et les healthchecks.
+
+## Cookies et login (`plain-HTTP LAN`, erreur 500)
+
+L’image Workspace tourne avec `NODE_ENV=production`. Dans ce mode, les cookies de session peuvent avoir le flag **Secure**. Sur une URL en **`http://`** (IP du VPS, `:3000`, LAN sans TLS), le navigateur **refuse** ces cookies → connexion impossible, parfois une **Internal Server Error** générique.
+
+Le log ressemble à :
+
+```
+[workspace] warning: plain-HTTP LAN deployment detected.
+  Browsers silently drop Secure cookies over http://, so login will fail.
+  Add COOKIE_SECURE=0 to your .env to fix this.
+```
+
+**Que faire selon ton accès :**
+
+| Comment tu ouvres l’UI | Variables à définir (Coolify / `.env`) |
+| --- | --- |
+| `http://IP` ou `http://…:3000` (sans TLS) | `HERMES_WORKSPACE_COOKIE_SECURE=0` |
+| `https://chat.tondomaine.com` via Coolify / Traefik | `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1` |
+
+Par défaut, ce dépôt **ne force plus** `COOKIE_SECURE` ni `TRUST_PROXY` (comme le [compose officiel](https://github.com/outsourc-e/hermes-workspace/blob/main/docker-compose.yml)) : l’UI peut auto-détecter le contexte. En pratique, fixe explicitement `0` ou `1` selon le tableau ci-dessus.
+
+Après changement :
+
+```bash
+docker compose up -d --force-recreate hermes-workspace
+```
+
+Pense à vider les cookies du site ou utiliser une fenêtre privée.
+
+## Avertissement `CLAUDE_DASHBOARD_TOKEN`
+
+```
+[gateway] CLAUDE_DASHBOARD_TOKEN is not set — falling back to the legacy HTML-scrape token flow.
+```
+
+C’est un **avertissement de dépréciation**, pas une panne. Le dashboard Hermes génère un token **éphémère** à chaque redémarrage ; le workspace le lit dans la page HTML du dashboard. Tu n’as **pas** à copier ce token dans le `.env` (une valeur figée provoquerait des 401 après redémarrage du dashboard).
+
+Tu peux l’ignorer tant que les logs montrent `enhanced=[sessions, skills, memory, config, jobs]`.
+
+## Erreur `EACCES` sur `config.yaml`
+
+```
+Error: EACCES: permission denied, open '/home/workspace/.hermes/config.yaml'
+```
+
+L’agent et le workspace **partagent** le volume `hermes_data` :
+
+- Agent : monté sur `/opt/data`
+- Workspace : monté sur `/home/workspace/.hermes`
+
+L’UI s’exécute en UID **10010** (utilisateur `workspace` dans l’image GHCR). Sans alignement, l’agent créait les fichiers en UID **10000** (`hermes`) et le workspace ne pouvait pas les modifier.
+
+Ce dépôt définit sur le service `hermes` :
+
+- `HERMES_UID=10010`
+- `HERMES_GID=10010`
+
+L’entrypoint officiel refait alors un `chown` du volume au démarrage.
 
 ```bash
 docker compose up -d --force-recreate hermes
 docker compose restart hermes-workspace
 ```
 
-Si l’erreur persiste : `docker compose exec -u root hermes chown -R 10010:10010 /opt/data`
+Si l’erreur persiste (fichiers créés avant la correction) :
+
+```bash
+docker compose exec -u root hermes chown -R 10010:10010 /opt/data
+docker compose restart hermes-workspace
+```
+
+## Authentification : deux secrets distincts
+
+| Variable | Protège quoi |
+| --- | --- |
+| `HERMES_PASSWORD` | Page de login **Hermes Workspace** (obligatoire : l’image écoute sur `0.0.0.0:3000`) |
+| `HERMES_API_SERVER_KEY` | API **gateway** Hermes (`:8642`) — transmise au workspace comme `HERMES_API_TOKEN` |
+
+Les deux doivent être renseignés en exposition Internet. Génération possible : `openssl rand -hex 32`.
+
+## Commandes utiles
+
+```bash
+# Santé des services
+docker compose ps
+docker compose logs -f hermes
+docker compose logs -f hermes-workspace
+
+# Tester gateway + dashboard depuis le conteneur agent
+docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8642/health').read())"
+docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9119/api/status').read())"
+```
 
 ---
 
@@ -230,7 +356,7 @@ Ce que tu peux faire, par ordre de robustesse :
 
 - **Authentification Workspace** — Définis **`HERMES_PASSWORD`** (session UI). En complément, **`HERMES_API_SERVER_KEY`** protège le gateway Hermes (Bearer).
 
-- **Cookies** — Coolify HTTPS : `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1`. Accès direct en `http://` : `HERMES_WORKSPACE_COOKIE_SECURE=0`.
+- **Cookies** — Voir [Dépannage → Cookies et login](#cookies-et-login-plain-http-lan-erreur-500).
 
 - **SSO / OAuth optionnel** — Tu peux ajouter une couche devant le workspace (Authentik, Authelia, Cloudflare Access) en plus du mot de passe Workspace.
 
