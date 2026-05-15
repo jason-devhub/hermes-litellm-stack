@@ -1,0 +1,5 @@
+FROM alpine:3.20
+
+COPY hermes-models.json /seed/models.json
+
+CMD ["sh", "-c", "set -eu; mkdir -p /home/workspace/.hermes; cp /seed/models.json /home/workspace/.hermes/models.json; chown ${HERMES_UID:-10010}:${HERMES_GID:-10010} /home/workspace/.hermes/models.json; chmod 0644 /home/workspace/.hermes/models.json"]

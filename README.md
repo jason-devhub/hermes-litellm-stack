@@ -38,10 +38,11 @@ LiteLLM utilise une petite image locale construite par `Dockerfile.litellm` : ba
 | --- | --- | --- |
 | **`litellm-config.yaml`** | LiteLLM | Liste des modèles (`model_list`), alias (`fast-model`), `api_base`, clés via `os.environ/…`. Schéma [doc LiteLLM proxy](https://docs.litellm.ai/docs/proxy/configs). |
 | **`hermes-config.yaml`** | Hermes | Bloc **`model:`** au [format Hermes](https://hermes-agent.nousresearch.com/docs/integrations/providers#custom--self-hosted-llm-providers) (`provider`, `default`, `context_length`, …). Ce n’est **pas** le même schéma que LiteLLM. |
+| **`hermes-models.json`** | Hermes Workspace | Liste affichée par le sélecteur `/model` de l’UI. Les `model` / `id` doivent correspondre à des alias LiteLLM ou à des noms wildcard acceptés par LiteLLM. |
 
 **Fusion en un seul fichier : impossible** : chaque service attend sa propre structure ; un YAML unique serait rejeté ou ignoré par l’un des deux.
 
-Dans ce dépôt, **l’URL LiteLLM, la clé « client » et le nom d’alias** pour Hermes sont surtout pilotés par le **`.env`** (variables `HERMES_LITELLM_*` dans `docker-compose.yml`, transmises à Hermes comme `CUSTOM_BASE_URL`, `OPENAI_API_KEY`, `HERMES_INFERENCE_MODEL`, etc.). **`hermes-config.yaml`** ne garde que le minimum côté Hermes (`provider: custom`, repli `default`, `context_length`). Pour changer la **fenêtre de contexte** (non exposée en env documentée), édite ce fichier.
+Dans ce dépôt, **l’URL LiteLLM, la clé « client » et le modèle par défaut** pour Hermes sont surtout pilotés par le **`.env`** (variables `HERMES_LITELLM_*` dans `docker-compose.yml`, transmises à Hermes comme `CUSTOM_BASE_URL`, `OPENAI_API_KEY`, `HERMES_INFERENCE_MODEL`, etc.). **`hermes-config.yaml`** ne garde que le minimum côté Hermes (`provider: custom`, repli `default`, `context_length`). **`hermes-models.json`** rend plusieurs modèles visibles dans Hermes Workspace sans redémarrer pour chaque changement de modèle. Pour changer la **fenêtre de contexte** (non exposée en env documentée), édite `hermes-config.yaml`.
 
 ---
 
@@ -50,8 +51,10 @@ Dans ce dépôt, **l’URL LiteLLM, la clé « client » et le nom d’alias** p
 - docker-compose.yml
 - Dockerfile.hermes (embarque `hermes-config.yaml` et nettoie un ancien mauvais dossier `/opt/data/config.yaml`)
 - Dockerfile.litellm (installe LiteLLM proxy et copie `litellm-config.yaml` dans l’image pour Coolify)
+- Dockerfile.workspace-config (écrit `hermes-models.json` dans le volume partagé `~/.hermes` avant le démarrage de Workspace)
 - litellm-config.yaml (sans secrets : clés providers via `os.environ/…`)
 - hermes-config.yaml (bloc `model:` Hermes ; complété par le `.env` pour LiteLLM)
+- hermes-models.json (liste des modèles affichés par Hermes Workspace)
 - `.env.example` (liste des variables à renseigner)
 - README.md
 
@@ -97,7 +100,7 @@ Variables utilisées :
 | `GOOGLE_API_KEY` | Optionnel : alias `vision-model` (Gemini) |
 | `HERMES_LITELLM_BASE_URL` | Optionnel : URL de base OpenAI-compatible vers LiteLLM (défaut `http://litellm:4000/v1`) — injectée dans Hermes comme `CUSTOM_BASE_URL` |
 | `HERMES_LITELLM_API_KEY` | Optionnel : en-tête `Authorization` côté client Hermes→LiteLLM (défaut `dummy` ; aligne avec un éventuel `master_key` LiteLLM) |
-| `HERMES_LITELLM_MODEL` | Optionnel : alias LiteLLM (`fast-model`, `nvidia-llama-3.1-8b`, …) **ou** chaîne complète `nvidia_nim/<id>` (wildcard `nvidia_nim/*` côté proxy ; défaut `fast-model`) |
+| `HERMES_LITELLM_MODEL` | Optionnel : modèle par défaut/fallback Hermes (`fast-model`, `chat-good`, `nvidia-deepseek-v4-flash`, …) **ou** chaîne complète `nvidia_nim/<id>` ; les choix visibles dans l’UI viennent de `hermes-models.json` |
 | `HERMES_INFERENCE_PROVIDER` | Optionnel : forcé à `custom` par défaut |
 | `HERMES_API_SERVER_KEY` | **Fortement recommandé** en Internet : Bearer pour l’API / UI Hermes (≥ 8 caractères ; ex. `openssl rand -hex 32`) |
 | `HERMES_API_SERVER_ENABLED` | Optionnel : `true` / `false` (défaut `true`) |
@@ -472,6 +475,8 @@ En résumé : **Coolify s’occupe du sous-domaine + SSL** ; expose le service *
 
 # Changer de modèle
 
+Hermes Workspace lit la liste des modèles depuis `~/.hermes/models.json`. Dans ce stack, le service one-shot `hermes-workspace-config` copie automatiquement `hermes-models.json` dans ce volume avant le démarrage de l’UI. Le sélecteur `/model` de Workspace peut donc proposer plusieurs alias simultanément, tandis que `HERMES_LITELLM_MODEL` reste seulement le modèle par défaut/fallback.
+
 **Catalogue NVIDIA (même clé `NVIDIA_API_KEY`)** — liste les ids exposés par ton compte :
 
 ```bash
@@ -479,11 +484,20 @@ curl -sS -H "Authorization: Bearer $NVIDIA_API_KEY" https://integrate.api.nvidia
 ```
 
 - **N’importe quel modèle** : dans LiteLLM ce dépôt expose une route **wildcard** `nvidia_nim/*`. Côté client (Hermes, curl, Hermes Workspace, etc.), passe `model` sous la forme **`nvidia_nim/<id>`** (ex. `nvidia_nim/meta/llama-3.1-8b-instruct`). Voir [wildcard routing LiteLLM](https://docs.litellm.ai/docs/wildcard_routing) et [provider NVIDIA NIM](https://docs.litellm.ai/docs/providers/nvidia_nim).
-- **Alias courts** : `fast-model`, `nvidia-llama-3.1-8b`, `nvidia-deepseek-v4-flash`, etc. sont définis dans `litellm-config.yaml` ; tu peux en ajouter sur le même modèle (`model: nvidia_nim/...`, `api_key: os.environ/NVIDIA_API_KEY`).
+- **Alias courts** : `fast-model`, `chat-good`, `nvidia-llama-3.1-8b`, `nvidia-deepseek-v4-flash`, etc. sont définis dans `litellm-config.yaml` ; tu peux en ajouter sur le même modèle (`model: nvidia_nim/...`, `api_key: os.environ/NVIDIA_API_KEY`).
 
-Dans **`litellm-config.yaml`** (autres providers) : chaîne `model:` et `model_name` comme d’habitude.
+Pour ajouter un modèle au sélecteur Workspace, ajoute-le à deux endroits :
 
-Dans le **`.env`** : **`HERMES_LITELLM_MODEL`** = alias LiteLLM ou chaîne complète `nvidia_nim/...` (défaut `fast-model`).
+1. **`litellm-config.yaml`** : déclare l’alias côté proxy (`model_name` + `litellm_params.model`).
+2. **`hermes-models.json`** : ajoute le même alias dans les champs `id` et `model`, avec un `name` lisible.
+
+Dans le **`.env`** : **`HERMES_LITELLM_MODEL`** = modèle par défaut/fallback (défaut `fast-model`). Ce n’est plus la liste complète des modèles utilisables.
+
+Après changement de `litellm-config.yaml` ou `hermes-models.json`, reconstruis/recrée les services concernés :
+
+```bash
+docker compose up -d --build litellm hermes-workspace-config hermes-workspace
+```
 
 Pour la **fenêtre de contexte** Hermes (≥ 64k requis pour l’agent), modifie `context_length` dans **`hermes-config.yaml`** (pas de variable d’environnement documentée à ce jour).
 

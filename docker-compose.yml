@@ -114,6 +114,8 @@ services:
     restart: unless-stopped
 
     depends_on:
+      hermes-workspace-config:
+        condition: service_completed_successfully
       hermes:
         condition: service_healthy
 
@@ -133,6 +135,23 @@ services:
     volumes:
       - hermes_data:/home/workspace/.hermes
       - hermes_workspace_files:/workspace
+
+  hermes-workspace-config:
+    build:
+      context: .
+      dockerfile: Dockerfile.workspace-config
+    image: hermes-workspace-config:latest
+
+    container_name: hermes-workspace-config
+
+    restart: "no"
+
+    environment:
+      HERMES_UID: "${HERMES_UID:-10010}"
+      HERMES_GID: "${HERMES_GID:-10010}"
+
+    volumes:
+      - hermes_data:/home/workspace/.hermes
 
 volumes:
   hermes_data:

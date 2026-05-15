@@ -1,0 +1,51 @@
+[
+  {
+    "id": "fast-model",
+    "name": "Fast - NVIDIA Llama 3.1 8B",
+    "provider": "custom",
+    "model": "fast-model",
+    "baseUrl": "http://litellm:4000/v1"
+  },
+  {
+    "id": "chat-good",
+    "name": "Quality - NVIDIA Llama 3.1 70B",
+    "provider": "custom",
+    "model": "chat-good",
+    "baseUrl": "http://litellm:4000/v1"
+  },
+  {
+    "id": "nvidia-deepseek-v4-flash",
+    "name": "NVIDIA DeepSeek V4 Flash",
+    "provider": "custom",
+    "model": "nvidia-deepseek-v4-flash",
+    "baseUrl": "http://litellm:4000/v1"
+  },
+  {
+    "id": "nvidia-mistral-7b",
+    "name": "NVIDIA Mistral 7B",
+    "provider": "custom",
+    "model": "nvidia-mistral-7b",
+    "baseUrl": "http://litellm:4000/v1"
+  },
+  {
+    "id": "reasoning-model",
+    "name": "Reasoning - Claude Sonnet",
+    "provider": "custom",
+    "model": "reasoning-model",
+    "baseUrl": "http://litellm:4000/v1"
+  },
+  {
+    "id": "code-model",
+    "name": "Code - DeepSeek Chat",
+    "provider": "custom",
+    "model": "code-model",
+    "baseUrl": "http://litellm:4000/v1"
+  },
+  {
+    "id": "vision-model",
+    "name": "Vision - Gemini 2.5 Pro",
+    "provider": "custom",
+    "model": "vision-model",
+    "baseUrl": "http://litellm:4000/v1"
+  }
+]
