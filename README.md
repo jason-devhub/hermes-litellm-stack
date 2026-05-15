@@ -99,8 +99,8 @@ Variables utilisées :
 | `HERMES_CORS_ORIGINS` | Optionnel : origines CORS pour l’UI (ex. `https://hermes.tondomaine.net`). Défaut `*` (pratique en dev, à resserrer en prod) |
 | `HERMES_UID` / `HERMES_GID` | Optionnel : propriétaire du volume partagé (défaut **10010**, aligné sur Hermes Workspace) |
 | `HERMES_PASSWORD` | **Obligatoire** : mot de passe de session Hermes Workspace (l’UI refuse de démarrer sur `0.0.0.0` sans secret) |
-| `HERMES_WORKSPACE_COOKIE_SECURE` | Optionnel : cookies Secure derrière HTTPS (défaut `1` ; mets `0` si accès HTTP LAN sans TLS) |
-| `HERMES_WORKSPACE_TRUST_PROXY` | Optionnel : faire confiance à `X-Forwarded-*` derrière Coolify/Traefik (défaut `1`) |
+| `HERMES_WORKSPACE_COOKIE_SECURE` | `0` si tu ouvres l’UI en **http://** (IP, LAN) ; `1` + `TRUST_PROXY=1` derrière **Coolify/HTTPS** |
+| `HERMES_WORKSPACE_TRUST_PROXY` | `1` uniquement derrière un reverse proxy de confiance (Coolify, Traefik) |
 
 En local, copie le modèle puis renseigne les valeurs :
 
@@ -195,6 +195,8 @@ docker compose exec hermes python3 -c "import urllib.request; print(urllib.reque
 docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9119/api/status').read())"
 ```
 
+**Login impossible / warning `plain-HTTP LAN` / erreur 500 au chargement :** en accès **http://** direct, définis `HERMES_WORKSPACE_COOKIE_SECURE=0` (sinon le navigateur rejette les cookies `Secure` en production). Derrière **Coolify en HTTPS**, utilise plutôt `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1`. Le message `CLAUDE_DASHBOARD_TOKEN` est un avertissement de dépréciation : le workspace récupère encore le token du dashboard via HTML ; tu peux l’ignorer tant que `enhanced=[sessions, skills, …]` apparaît dans les logs.
+
 **Erreur `EACCES` sur `/home/workspace/.hermes/config.yaml` :** l’agent et le workspace partagent le volume `hermes_data`. L’UI tourne en UID **10010** ; sans `HERMES_UID=10010`, l’agent écrit en **10000** et le workspace ne peut pas modifier la config. Ce dépôt fixe `HERMES_UID` / `HERMES_GID` à `10010` sur le service `hermes`. Après mise à jour, redémarre pour que l’entrypoint refasse le `chown` du volume :
 
 ```bash
@@ -228,7 +230,7 @@ Ce que tu peux faire, par ordre de robustesse :
 
 - **Authentification Workspace** — Définis **`HERMES_PASSWORD`** (session UI). En complément, **`HERMES_API_SERVER_KEY`** protège le gateway Hermes (Bearer).
 
-- **Cookies derrière HTTPS** — Par défaut `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1` pour Coolify/Traefik. Si tu testes en HTTP LAN sans TLS, mets `HERMES_WORKSPACE_COOKIE_SECURE=0`.
+- **Cookies** — Coolify HTTPS : `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1`. Accès direct en `http://` : `HERMES_WORKSPACE_COOKIE_SECURE=0`.
 
 - **SSO / OAuth optionnel** — Tu peux ajouter une couche devant le workspace (Authentik, Authelia, Cloudflare Access) en plus du mot de passe Workspace.
 
