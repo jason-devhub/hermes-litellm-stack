@@ -5,7 +5,9 @@ RUN pip install --no-cache-dir "litellm[proxy]"
 WORKDIR /app
 
 COPY litellm-config.yaml /app/proxy_server_config.yaml
+COPY docker/litellm-entrypoint.sh /app/litellm-entrypoint.sh
+RUN chmod +x /app/litellm-entrypoint.sh
 
 EXPOSE 4000
 
-ENTRYPOINT ["litellm", "--config", "/app/proxy_server_config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+ENTRYPOINT ["/app/litellm-entrypoint.sh"]

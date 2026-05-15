@@ -5,4 +5,17 @@
 model:
   provider: custom
   default: fast-model
+  base_url: http://litellm:4000/v1
+  # Minimum Hermes Agent : 64k (doc officielle). Llama 8B NIM supporte 128k.
   context_length: 131072
+
+# Chat UI : moins d’outils = réponses plus rapides et sessions plus légères
+agent:
+  disabled_toolsets:
+    - browser
+
+# Timeouts allongés pour les appels via LiteLLM → NVIDIA NIM (cold start possible)
+providers:
+  custom:
+    request_timeout_seconds: 600
+    stale_timeout_seconds: 600

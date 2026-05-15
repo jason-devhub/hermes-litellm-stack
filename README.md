@@ -26,7 +26,7 @@ NVIDIA API (ou autres providers)
 
 # Hermes (image officielle)
 
-Ce dépôt utilise l’image **`nousresearch/hermes-agent`** avec la commande **`gateway run`**, le **dashboard** sur `:9119` (`HERMES_DASHBOARD=1`) et les données sous **`/opt/data`** ([guide Docker](https://hermes-agent.nousresearch.com/docs/user-guide/docker)). L’interface web est **[Hermes Workspace](https://github.com/outsourc-e/hermes-workspace)** (`ghcr.io/outsourc-e/hermes-workspace`), pas Open WebUI. Sur Coolify, Hermes est construit via `Dockerfile.hermes` pour embarquer `hermes-config.yaml` dans l’image au lieu de le monter comme fichier sous `/opt/data/config.yaml`.
+Ce dépôt utilise l’image **`nousresearch/hermes-agent`** avec la commande **`gateway run`**, le **dashboard** sur `:9119` (`HERMES_DASHBOARD=1`) et les données sous **`/opt/data`** ([guide Docker](https://hermes-agent.nousresearch.com/docs/user-guide/docker)). L’image officielle est déjà construite depuis les sources Hermes ; le `Dockerfile.hermes` permet de pinner ou surcharger l’image via `HERMES_AGENT_IMAGE`, et Coolify force le pull de la base récente pendant le build. L’interface web est **[Hermes Workspace](https://github.com/outsourc-e/hermes-workspace)** (`ghcr.io/outsourc-e/hermes-workspace`), pas Open WebUI. Sur Coolify, Hermes est construit via `Dockerfile.hermes` pour embarquer `hermes-config.yaml` dans l’image au lieu de le monter comme fichier sous `/opt/data/config.yaml`.
 
 LiteLLM utilise une petite image locale construite par `Dockerfile.litellm` : base Python, installation de `litellm[proxy]`, puis copie de `litellm-config.yaml` vers `/app/proxy_server_config.yaml`. C’est plus fiable sur Coolify qu’un bind mount de fichier et cela évite de retomber sur la config Azure d’exemple embarquée dans certaines images LiteLLM.
 
@@ -105,6 +105,8 @@ Variables utilisées :
 | `HERMES_API_SERVER_PORT` | Optionnel : port dans le conteneur (défaut `8642` ; adapte aussi `HERMES_PUBLISH_PORT` si tu changes le mapping) |
 | `HERMES_PUBLISH_PORT` | Optionnel : port exposé sur l’hôte (défaut = port conteneur) |
 | `HERMES_CORS_ORIGINS` | Optionnel : origines CORS pour l’UI (ex. `https://hermes.tondomaine.net`). Défaut `*` (pratique en dev, à resserrer en prod) |
+| `HERMES_AGENT_IMAGE` | Optionnel : image Hermes de base à utiliser pendant le build (défaut `nousresearch/hermes-agent:latest`) |
+| `HERMES_DASHBOARD_TUI` | Optionnel : `1` pour exposer l’onglet TUI du dashboard officiel |
 | `HERMES_UID` / `HERMES_GID` | Optionnel : propriétaire du volume partagé (défaut **10010**, aligné sur Hermes Workspace) |
 | `HERMES_PASSWORD` | **Obligatoire** : mot de passe de session Hermes Workspace (l’UI refuse de démarrer sur `0.0.0.0` sans secret) |
 | `HERMES_WORKSPACE_COOKIE_SECURE` | Défaut **`0`** (déjà dans `docker-compose.yml`) — ne touche pas sauf besoin précis |
@@ -250,6 +252,53 @@ Voir la section [Dépannage Hermes Workspace](#dépannage-hermes-workspace) pour
 
 # Dépannage Hermes Workspace
 
+## Warning `backend does not support the sessions API`
+
+```
+Your Hermes backend does not support the sessions API. For full features, install Hermes Agent from source ...
+```
+
+Dans cette stack Docker, tu ne dois pas lancer `hermes dashboard` dans un deuxième conteneur séparé : la doc officielle précise que le dashboard doit démarrer comme side-process du même conteneur que `gateway run`. C’est exactement le rôle de :
+
+- `HERMES_DASHBOARD=1` sur le service `hermes`
+- `HERMES_DASHBOARD_URL=http://hermes:9119` sur le service `hermes-workspace`
+- le healthcheck qui teste à la fois `http://127.0.0.1:8642/health` et `http://127.0.0.1:9119/api/status`
+
+Si Hermes Workspace affiche encore ce warning après déploiement Coolify, vérifie dans cet ordre :
+
+```bash
+docker compose up -d --build --pull always --force-recreate hermes hermes-workspace
+docker compose logs -f hermes
+docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9119/api/status', timeout=5).read())"
+```
+
+Dans les logs `hermes`, tu dois voir une ligne du type `Starting hermes dashboard on 0.0.0.0:9119 (background)` puis des lignes préfixées par `[dashboard]`. Dans les logs `hermes-workspace`, le bon état ressemble à `enhanced=[sessions, skills, memory, config, jobs]`.
+
+Causes fréquentes :
+
+| Cause | Correctif |
+| --- | --- |
+| Image Hermes trop ancienne ou cache Coolify | Relance avec rebuild sans cache / pull base récente ; ce compose met `build.pull: true` et `HERMES_AGENT_IMAGE=nousresearch/hermes-agent:latest` par défaut |
+| `HERMES_DASHBOARD=1` absent dans l’environnement Coolify | Laisse la valeur du compose ou ajoute-la explicitement dans Coolify |
+| Port interne `9119` non joignable entre services | Ne publie pas forcément le port publiquement, mais garde `expose: 9119` et `HERMES_DASHBOARD_URL=http://hermes:9119` |
+| Gateway non authentifié correctement | Renseigne `HERMES_API_SERVER_KEY` et laisse le workspace le recevoir via `HERMES_API_TOKEN` |
+
+## Erreur GHCR `denied: denied` au pull
+
+```
+Error response from daemon: Head "https://ghcr.io/v2/outsourc-e/hermes-workspace/manifests/latest": denied: denied
+```
+
+L’image `ghcr.io/outsourc-e/hermes-workspace` est **publique** ; ce message vient presque toujours d’**anciennes identifiants GHCR** enregistrés localement (compte sans accès au package).
+
+```bash
+docker logout ghcr.io
+docker compose pull hermes-workspace
+docker compose up -d --build
+```
+
+Si le pull échoue encore sans être connecté à GHCR, vérifie le pare-feu / proxy. Il n’existe pas de miroir Docker Hub officiel pour cette image : corrige l’auth GHCR ou construis l’UI depuis les sources ([hermes-workspace](https://github.com/outsourc-e/hermes-workspace)).
+
 ## Lire les logs au démarrage
 
 Au lancement, le conteneur `hermes-workspace` affiche en général :
@@ -334,6 +383,47 @@ docker compose restart hermes-workspace
 | `HERMES_API_SERVER_KEY` | API **gateway** Hermes (`:8642`) — transmise au workspace comme `HERMES_API_TOKEN` |
 
 Les deux doivent être renseignés en exposition Internet. Génération possible : `openssl rand -hex 32`.
+
+## Chat sans réponse dans l’UI
+
+**Symptôme :** le message part, rien ne s’affiche (ou ça tourne indéfiniment).
+
+**1. Vérifier que Hermes atteint LiteLLM** (depuis le conteneur agent) :
+
+```bash
+docker compose exec hermes python3 -c "
+import json, urllib.request
+req = urllib.request.Request(
+    'http://litellm:4000/v1/chat/completions',
+    data=json.dumps({'model':'fast-model','messages':[{'role':'user','content':'ping'}],'max_tokens':5}).encode(),
+    headers={'Content-Type':'application/json','Authorization':'Bearer dummy'},
+    method='POST',
+)
+print(urllib.request.urlopen(req, timeout=120).read()[:400])
+"
+```
+
+Si ça échoue : clé `NVIDIA_API_KEY`, logs `docker compose logs litellm`, ou `config.yaml` sans `base_url: http://litellm:4000/v1` sous `model:`.
+
+**2. `Path not found: /workspace` dans les logs Hermes**
+
+L’UI Workspace utilise `/workspace` pour les fichiers ; l’agent doit avoir **le même volume** monté au même chemin. Ce dépôt monte `hermes_workspace_files` sur **hermes** et **hermes-workspace**. Après mise à jour :
+
+```bash
+docker compose up -d --force-recreate hermes hermes-workspace
+```
+
+**3. `providers.manifest: unknown config keys ignored: type`**
+
+Avertissement bénin : une clé `type` dans ton `config.yaml` (souvent écrit par l’UI) est ignorée. Ce n’est en général **pas** la cause d’un chat vide.
+
+**4. Logs utiles pendant un message test**
+
+```bash
+docker compose logs -f hermes
+```
+
+Cherche des erreurs LiteLLM, timeout, ou 401 sur le gateway.
 
 ## Commandes utiles
 

@@ -2,13 +2,19 @@
 # Syntaxe LiteLLM : https://docs.litellm.ai/docs/proxy/configs (section « Load API Keys from Environment »)
 # NVIDIA NIM : https://docs.litellm.ai/docs/providers/nvidia_nim — wildcard https://docs.litellm.ai/docs/wildcard_routing
 
+litellm_settings:
+  # Évite des attentes infinies côté proxy si NVIDIA ne répond pas
+  request_timeout: 600
+  num_retries: 1
+
 model_list:
 
-  # Défaut (Hermes : alias « fast-model »)
+  # Défaut (Hermes : alias « fast-model ») — Llama 8B : démarrage plus rapide que Minimax M2.7
   - model_name: fast-model
     litellm_params:
-      model: nvidia_nim/minimaxai/minimax-m2.7
+      model: nvidia_nim/meta/llama-3.1-8b-instruct
       api_key: os.environ/NVIDIA_API_KEY
+      timeout: 300
 
   # Tout modèle du catalogue accessible avec ta clé : utiliser model="nvidia_nim/<id>"
   # où <id> est le champ "id" de GET https://integrate.api.nvidia.com/v1/models (ex. meta/llama-3.1-8b-instruct).
