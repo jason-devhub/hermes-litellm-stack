@@ -5,6 +5,6 @@ COPY docker/hermes-entrypoint.sh /opt/hermes/docker/hermes-entrypoint.sh
 
 RUN chmod +x /opt/hermes/docker/hermes-entrypoint.sh
 
-EXPOSE 8642
+EXPOSE 8642 9119
 
 ENTRYPOINT ["/opt/hermes/docker/hermes-entrypoint.sh"]

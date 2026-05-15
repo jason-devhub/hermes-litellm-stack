@@ -18,7 +18,7 @@ NVIDIA API
 
 # Hermes (image officielle)
 
-Ce dépôt utilise l’image **`nousresearch/hermes-agent`** avec la commande **`gateway run`** et les données sous **`/opt/data`** ([guide Docker](https://hermes-agent.nousresearch.com/docs/user-guide/docker)). Sur Coolify, Hermes est construit via `Dockerfile.hermes` pour embarquer `hermes-config.yaml` dans l’image au lieu de le monter comme fichier sous `/opt/data/config.yaml`.
+Ce dépôt utilise l’image **`nousresearch/hermes-agent`** avec la commande **`gateway run`**, le **dashboard** sur `:9119` (`HERMES_DASHBOARD=1`) et les données sous **`/opt/data`** ([guide Docker](https://hermes-agent.nousresearch.com/docs/user-guide/docker)). L’interface web est **[Hermes Workspace](https://github.com/outsourc-e/hermes-workspace)** (`ghcr.io/outsourc-e/hermes-workspace`), pas Open WebUI. Sur Coolify, Hermes est construit via `Dockerfile.hermes` pour embarquer `hermes-config.yaml` dans l’image au lieu de le monter comme fichier sous `/opt/data/config.yaml`.
 
 LiteLLM utilise une petite image locale construite par `Dockerfile.litellm` : base Python, installation de `litellm[proxy]`, puis copie de `litellm-config.yaml` vers `/app/proxy_server_config.yaml`. C’est plus fiable sur Coolify qu’un bind mount de fichier et cela évite de retomber sur la config Azure d’exemple embarquée dans certaines images LiteLLM.
 
@@ -97,6 +97,9 @@ Variables utilisées :
 | `HERMES_API_SERVER_PORT` | Optionnel : port dans le conteneur (défaut `8642` ; adapte aussi `HERMES_PUBLISH_PORT` si tu changes le mapping) |
 | `HERMES_PUBLISH_PORT` | Optionnel : port exposé sur l’hôte (défaut = port conteneur) |
 | `HERMES_CORS_ORIGINS` | Optionnel : origines CORS pour l’UI (ex. `https://hermes.tondomaine.net`). Défaut `*` (pratique en dev, à resserrer en prod) |
+| `HERMES_PASSWORD` | **Obligatoire** : mot de passe de session Hermes Workspace (l’UI refuse de démarrer sur `0.0.0.0` sans secret) |
+| `HERMES_WORKSPACE_COOKIE_SECURE` | Optionnel : cookies Secure derrière HTTPS (défaut `1` ; mets `0` si accès HTTP LAN sans TLS) |
+| `HERMES_WORKSPACE_TRUST_PROXY` | Optionnel : faire confiance à `X-Forwarded-*` derrière Coolify/Traefik (défaut `1`) |
 
 En local, copie le modèle puis renseigne les valeurs :
 
@@ -110,7 +113,7 @@ Docker Compose transmet ces variables aux services `litellm` et `hermes` (voir `
 
 ## Déploiement Coolify
 
-Dans l’application Coolify : onglet **Environment**, ajoute les mêmes noms de variables (`NVIDIA_API_KEY`, `HERMES_LITELLM_*`, `HERMES_API_SERVER_KEY`, etc.) avec les valeurs secrètes. Aucun secret n’a besoin d’être dans le dépôt que Coolify clone ; `litellm-config.yaml` et `hermes-config.yaml` restent sans secrets providers côté NVIDIA / autres (clés via l’environnement ou valeurs non sensibles type `dummy`).
+Dans l’application Coolify : onglet **Environment**, ajoute les mêmes noms de variables (`NVIDIA_API_KEY`, `HERMES_LITELLM_*`, `HERMES_API_SERVER_KEY`, `HERMES_PASSWORD`, etc.) avec les valeurs secrètes. Aucun secret n’a besoin d’être dans le dépôt que Coolify clone ; `litellm-config.yaml` et `hermes-config.yaml` restent sans secrets providers côté NVIDIA / autres (clés via l’environnement ou valeurs non sensibles type `dummy`).
 
 Si tu n’utilises pas certains alias LiteLLM, tu peux retirer les entrées correspondantes dans `litellm-config.yaml` pour éviter des erreurs au moment des appels.
 
@@ -123,6 +126,14 @@ docker compose up -d
 ```
 
 (Adapte le nom du volume si ton dossier projet a un autre nom sur l’hôte.)
+
+**Migration depuis Open WebUI :** le service `open-webui` et le volume `open_webui_data` ont été retirés. Tu peux supprimer l’ancien volume si tu n’en as plus besoin :
+
+```bash
+docker compose down
+docker volume rm hermes-litellm-stack_open_webui_data 2>/dev/null || true
+docker compose up -d
+```
 
 ---
 
@@ -137,8 +148,8 @@ docker compose up -d
 Cela démarre :
 
 - **LiteLLM** sur le port `4000` (API compatible OpenAI, utilisée en interne par Hermes)
-- **Hermes** sur le port `8642` (API OpenAI-compatible pour l’agent)
-- **Open WebUI** sur le port interne `8080` (interface web connectée à Hermes)
+- **Hermes** sur les ports internes `8642` (gateway) et `9119` (dashboard)
+- **Hermes Workspace** sur le port interne `3000` (interface web native pour l’agent)
 
 Vérifier que les conteneurs tournent :
 
@@ -162,22 +173,26 @@ http://IP_DU_VPS:8642
 
 Si tu as défini `HERMES_API_SERVER_KEY`, les clients doivent envoyer cette valeur en en-tête `Authorization: Bearer …` (comportement type API OpenAI). Le endpoint principal pour les frontends est `/v1`.
 
-## Accéder à Open WebUI
+## Accéder à Hermes Workspace
 
-Open WebUI est ajouté comme interface web devant Hermes. Dans Coolify, rattache un domaine au service **`open-webui`** avec le port interne **`8080`** (ex. domaine configuré comme `https://chat.example.com:8080` côté Coolify, puis accès navigateur via `https://chat.example.com`).
+[Hermes Workspace](https://github.com/outsourc-e/hermes-workspace) remplace Open WebUI : c’est l’interface native (chat, mémoire, skills, terminal) branchée sur le gateway Hermes et son dashboard.
 
-Open WebUI garde son authentification native (`WEBUI_AUTH=true` par défaut). Hermes et LiteLLM ne publient plus de ports hôte : ils restent accessibles uniquement depuis le réseau Docker de la stack.
+Dans Coolify, rattache un domaine au service **`hermes-workspace`** avec le port interne **`3000`** (ex. `https://chat.example.com`).
 
-La connexion Hermes est préconfigurée côté Open WebUI avec :
+Au premier accès, connecte-toi avec le mot de passe défini dans **`HERMES_PASSWORD`**. Le workspace parle à Hermes via le réseau Docker :
 
-- `ENABLE_OPENAI_API=true`
-- `OPENAI_API_BASE_URL=http://hermes:8642/v1`
-- `OPENAI_API_BASE_URLS=http://hermes:8642/v1`
-- `OPENAI_API_KEY=${HERMES_API_SERVER_KEY}`
-- `OPENAI_API_KEYS=${HERMES_API_SERVER_KEY}` (même variable que pour Hermes, pas de clé Open WebUI séparée)
-- `DEFAULT_MODELS=hermes-agent`
+- `HERMES_API_URL=http://hermes:8642` (gateway)
+- `HERMES_DASHBOARD_URL=http://hermes:9119` (sessions, skills, jobs)
+- `HERMES_API_TOKEN` = même valeur que **`HERMES_API_SERVER_KEY`** si le gateway est authentifié
 
-Open WebUI persiste sa configuration dans le volume `open_webui_data`. Après le premier démarrage, certaines valeurs modifiées dans l’admin UI peuvent primer sur les variables d’environnement. Si l’UI « réfléchit » mais que les logs Hermes restent vides, vérifie dans **Admin Panel → Settings → Connections** que l’URL est `http://hermes:8642/v1` et que la clé API est exactement `HERMES_API_SERVER_KEY`. En cas de premier démarrage raté, corrige via l’admin UI ou recrée le volume `open_webui_data` si tu peux perdre les comptes/chats.
+Les données agent (config, sessions, mémoire) partagent le volume `hermes_data` ; les fichiers créés depuis le navigateur de fichiers du workspace vont dans `hermes_workspace_files`.
+
+Vérification rapide :
+
+```bash
+docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8642/health').read())"
+docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9119/api/status').read())"
+```
 
 ---
 
@@ -191,7 +206,7 @@ Ce que tu peux faire, par ordre de robustesse :
 
 2. **Couche devant l’app (recommandé en plus)** — Coolify, Traefik, Caddy ou nginx : **TLS**, éventuellement **SSO / basic auth** (Authelia, Authentik, accès Cloudflare, etc.). C’est souvent ce qu’on entend par « sécuriser l’interface » pour une app sans login intégré.
 
-3. **Réseau** — LiteLLM et Hermes ne publient pas de ports hôte dans ce compose ; Open WebUI parle à Hermes via le réseau Docker interne, et Hermes parle à LiteLLM de la même façon.
+3. **Réseau** — LiteLLM et Hermes ne publient pas de ports hôte dans ce compose ; Hermes Workspace parle à Hermes via le réseau Docker interne, et Hermes parle à LiteLLM de la même façon.
 
 4. **LiteLLM** — Si le port `4000` reste exposé, configure un `master_key` côté LiteLLM (voir doc proxy) pour éviter qu’un tiers n’utilise ton proxy et donc tes quotas / facturation.
 
@@ -199,15 +214,15 @@ Ce que tu peux faire, par ordre de robustesse :
 
 - **TLS (HTTPS)** — En rattachant un **domaine** (sous-domaine) à ton application dans Coolify, le proxy (Traefik / stack Coolify) obtient en général un certificat **Let’s Encrypt** automatiquement. Hermes derrière le proxy peut rester en HTTP interne ; ce n’est pas lui qui gère le certificat.
 
-- **Port interne Hermes** — L’URL publique reste bien `https://hermes.example.com` sans `:8642`. Le port `8642` est seulement le port **interne conteneur** vers lequel Coolify/Traefik route le trafic. `Dockerfile.hermes` déclare donc `EXPOSE 8642` pour que Coolify sache quel backend utiliser dans une stack Docker Compose.
+- **Port interne** — L’URL publique reste `https://chat.example.com` sans `:3000`. Le port `3000` est le port **interne conteneur** du service `hermes-workspace` vers lequel Coolify/Traefik route le trafic.
 
-- **Authentification Open WebUI** — Open WebUI fournit sa propre page de connexion (`WEBUI_AUTH=true` par défaut). Pour ce déploiement, on évite une double authentification Basic Auth Traefik + login Open WebUI afin de garder le flux simple.
+- **Authentification Workspace** — Définis **`HERMES_PASSWORD`** (session UI). En complément, **`HERMES_API_SERVER_KEY`** protège le gateway Hermes (Bearer).
 
-- **SSO / OAuth optionnel** — Si tu veux plus tard une couche entreprise devant Open WebUI, utilise par exemple [Authentik en forward auth](https://coolify.io/docs/knowledge-base/proxy/traefik/protect-services-with-authentik), Authelia ou Cloudflare Access.
+- **Cookies derrière HTTPS** — Par défaut `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1` pour Coolify/Traefik. Si tu testes en HTTP LAN sans TLS, mets `HERMES_WORKSPACE_COOKIE_SECURE=0`.
 
-- **En complément** — Définir **`HERMES_API_SERVER_KEY`** (Bearer côté Hermes) : barrière côté application en plus du proxy.
+- **SSO / OAuth optionnel** — Tu peux ajouter une couche devant le workspace (Authentik, Authelia, Cloudflare Access) en plus du mot de passe Workspace.
 
-En résumé : **Coolify s’occupe du sous-domaine + SSL** ; expose le service **`open-webui`** uniquement, utilise l’auth native Open WebUI, et garde Hermes/LiteLLM non exposés sur des ports publics bruts.
+En résumé : **Coolify s’occupe du sous-domaine + SSL** ; expose le service **`hermes-workspace`** uniquement, et garde Hermes/LiteLLM non exposés sur des ports publics bruts.
 
 ---
 
@@ -219,7 +234,7 @@ En résumé : **Coolify s’occupe du sous-domaine + SSL** ; expose le service *
 curl -sS -H "Authorization: Bearer $NVIDIA_API_KEY" https://integrate.api.nvidia.com/v1/models | jq '.data[].id'
 ```
 
-- **N’importe quel modèle** : dans LiteLLM ce dépôt expose une route **wildcard** `nvidia_nim/*`. Côté client (Hermes, curl, Open WebUI, etc.), passe `model` sous la forme **`nvidia_nim/<id>`** (ex. `nvidia_nim/meta/llama-3.1-8b-instruct`). Voir [wildcard routing LiteLLM](https://docs.litellm.ai/docs/wildcard_routing) et [provider NVIDIA NIM](https://docs.litellm.ai/docs/providers/nvidia_nim).
+- **N’importe quel modèle** : dans LiteLLM ce dépôt expose une route **wildcard** `nvidia_nim/*`. Côté client (Hermes, curl, Hermes Workspace, etc.), passe `model` sous la forme **`nvidia_nim/<id>`** (ex. `nvidia_nim/meta/llama-3.1-8b-instruct`). Voir [wildcard routing LiteLLM](https://docs.litellm.ai/docs/wildcard_routing) et [provider NVIDIA NIM](https://docs.litellm.ai/docs/providers/nvidia_nim).
 - **Alias courts** : `fast-model`, `nvidia-llama-3.1-8b`, `nvidia-deepseek-v4-flash`, etc. sont définis dans `litellm-config.yaml` ; tu peux en ajouter sur le même modèle (`model: nvidia_nim/...`, `api_key: os.environ/NVIDIA_API_KEY`).
 
 Dans **`litellm-config.yaml`** (autres providers) : chaîne `model:` et `model_name` comme d’habitude.
@@ -272,6 +287,10 @@ Minimum :
 Hermes Agent (amont, doc officielle) :
 https://github.com/NousResearch/hermes-agent  
 https://hermes-agent.nousresearch.com/docs/
+
+Hermes Workspace (interface web) :
+https://github.com/outsourc-e/hermes-workspace  
+https://hermes-workspace.com/
 
 LiteLLM :
 https://litellm.ai

@@ -54,6 +54,7 @@ services:
 
     expose:
       - "${HERMES_API_SERVER_PORT:-8642}"
+      - "${HERMES_DASHBOARD_PORT:-9119}"
 
     environment:
       # Hermes → LiteLLM (surcharge .env / Coolify ; voir README « Deux fichiers YAML »)
@@ -62,13 +63,18 @@ services:
       HERMES_INFERENCE_PROVIDER: ${HERMES_INFERENCE_PROVIDER:-custom}
       HERMES_INFERENCE_MODEL: ${HERMES_LITELLM_MODEL:-fast-model}
 
-      # Serveur HTTP (UI + API). Défauts = doc officielle ; surcharge via .env / Coolify (préfixe HERMES_*).
+      # Serveur HTTP (gateway + API). Défauts = doc officielle ; surcharge via .env / Coolify (préfixe HERMES_*).
       API_SERVER_ENABLED: "${HERMES_API_SERVER_ENABLED:-true}"
       API_SERVER_HOST: "${HERMES_API_SERVER_HOST:-0.0.0.0}"
       API_SERVER_PORT: "${HERMES_API_SERVER_PORT:-8642}"
       API_SERVER_KEY: ${HERMES_API_SERVER_KEY:-}
       # Origines autorisées pour l’UI dans le navigateur (* = dev uniquement ; restreindre derrière Coolify en prod)
       API_SERVER_CORS_ORIGINS: ${HERMES_CORS_ORIGINS:-*}
+
+      # Dashboard Hermes (sessions, skills, jobs) — requis par Hermes Workspace
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: "${HERMES_DASHBOARD_HOST:-0.0.0.0}"
+      HERMES_DASHBOARD_PORT: "${HERMES_DASHBOARD_PORT:-9119}"
 
     volumes:
       - hermes_data:/opt/data
@@ -79,19 +85,17 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python3 -c \"import os,urllib.request as u;p=os.environ.get('API_SERVER_PORT','8642');r=u.Request('http://127.0.0.1:%s/health'%p);k=os.environ.get('API_SERVER_KEY') or '';k and r.add_header('Authorization', 'Bearer ' + k);u.urlopen(r,timeout=5).read()\"",
+          "python3 -c \"import os,urllib.request as u;p=os.environ.get('API_SERVER_PORT','8642');r=u.Request('http://127.0.0.1:%s/health'%p);k=os.environ.get('API_SERVER_KEY') or '';k and r.add_header('Authorization', 'Bearer '+k);u.urlopen(r,timeout=5).read();d=os.environ.get('HERMES_DASHBOARD_PORT','9119');u.urlopen('http://127.0.0.1:%s/api/status'%d,timeout=5).read()\"",
         ]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 180s
 
-  open-webui:
-    # Si GHCR renvoie "denied" sur une image publique, lance `docker logout ghcr.io`
-    # ou surcharge avec OPENWEBUI_IMAGE=openwebui/open-webui:latest.
-    image: ${OPENWEBUI_IMAGE:-ghcr.io/open-webui/open-webui:main}
+  hermes-workspace:
+    image: ${HERMES_WORKSPACE_IMAGE:-ghcr.io/outsourc-e/hermes-workspace:latest}
 
-    container_name: open-webui
+    container_name: hermes-workspace
 
     restart: unless-stopped
 
@@ -99,24 +103,24 @@ services:
       hermes:
         condition: service_healthy
 
-    # Port interne pour Coolify/Traefik : configure le domaine du service en https://ton-domaine:8080.
+    # Port interne pour Coolify/Traefik : rattache un domaine au service hermes-workspace, port 3000.
     expose:
-      - "8080"
+      - "${HERMES_WORKSPACE_PORT:-3000}"
 
     environment:
-      WEBUI_NAME: ${OPENWEBUI_NAME:-Hermes Agent}
-      WEBUI_AUTH: "${OPENWEBUI_AUTH:-true}"
-      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:-}
-      ENABLE_OPENAI_API: "${OPENWEBUI_ENABLE_OPENAI_API:-true}"
-      DEFAULT_MODELS: ${OPENWEBUI_DEFAULT_MODELS:-hermes-agent}
-      OPENAI_API_BASE_URL: ${OPENWEBUI_OPENAI_API_BASE_URL:-http://hermes:8642/v1}
-      OPENAI_API_BASE_URLS: ${OPENWEBUI_OPENAI_API_BASE_URLS:-http://hermes:8642/v1}
-      OPENAI_API_KEY: ${HERMES_API_SERVER_KEY:-}
-      OPENAI_API_KEYS: ${HERMES_API_SERVER_KEY:-}
+      HERMES_HOME: /home/workspace/.hermes
+      HERMES_WORKSPACE_DIR: /workspace
+      HERMES_API_URL: http://hermes:${HERMES_API_SERVER_PORT:-8642}
+      HERMES_DASHBOARD_URL: http://hermes:${HERMES_DASHBOARD_PORT:-9119}
+      HERMES_API_TOKEN: ${HERMES_API_SERVER_KEY:-}
+      HERMES_PASSWORD: ${HERMES_PASSWORD:-}
+      COOKIE_SECURE: ${HERMES_WORKSPACE_COOKIE_SECURE:-1}
+      TRUST_PROXY: ${HERMES_WORKSPACE_TRUST_PROXY:-1}
 
     volumes:
-      - open_webui_data:/app/backend/data
+      - hermes_data:/home/workspace/.hermes
+      - hermes_workspace_files:/workspace
 
 volumes:
   hermes_data:
-  open_webui_data:
+  hermes_workspace_files:
