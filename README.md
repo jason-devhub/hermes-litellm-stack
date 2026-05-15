@@ -18,9 +18,9 @@ NVIDIA API
 
 # Hermes (image officielle)
 
-Ce dépôt utilise l’image **`nousresearch/hermes-agent`** avec la commande **`gateway run`** et les données sous **`/opt/data`** ([guide Docker](https://hermes-agent.nousresearch.com/docs/user-guide/docker)).
+Ce dépôt utilise l’image **`nousresearch/hermes-agent`** avec la commande **`gateway run`** et les données sous **`/opt/data`** ([guide Docker](https://hermes-agent.nousresearch.com/docs/user-guide/docker)). Sur Coolify, Hermes est construit via `Dockerfile.hermes` pour embarquer `hermes-config.yaml` dans l’image au lieu de le monter comme fichier sous `/opt/data/config.yaml`.
 
-LiteLLM part de l’image **`ghcr.io/berriai/litellm:main`**, avec une petite image locale construite par `Dockerfile.litellm` pour copier `litellm-config.yaml` dans l’image. C’est plus fiable sur Coolify qu’un bind mount de fichier : le fichier remplace aussi `/app/proxy_server_config.yaml`, le chemin lu par l’entrypoint LiteLLM, afin d’éviter de retomber sur la config Azure d’exemple embarquée dans l’image.
+LiteLLM utilise une petite image locale construite par `Dockerfile.litellm` : base Python, installation de `litellm[proxy]`, puis copie de `litellm-config.yaml` vers `/app/proxy_server_config.yaml`. C’est plus fiable sur Coolify qu’un bind mount de fichier et cela évite de retomber sur la config Azure d’exemple embarquée dans certaines images LiteLLM.
 
 ---
 
@@ -40,7 +40,8 @@ Dans ce dépôt, **l’URL LiteLLM, la clé « client » et le nom d’alias** p
 # Contenu du dossier
 
 - docker-compose.yml
-- Dockerfile.litellm (copie `litellm-config.yaml` dans l’image LiteLLM pour Coolify)
+- Dockerfile.hermes (embarque `hermes-config.yaml` et nettoie un ancien mauvais dossier `/opt/data/config.yaml`)
+- Dockerfile.litellm (installe LiteLLM proxy et copie `litellm-config.yaml` dans l’image pour Coolify)
 - litellm-config.yaml (sans secrets : clés providers via `os.environ/…`)
 - hermes-config.yaml (bloc `model:` Hermes ; complété par le `.env` pour LiteLLM)
 - `.env.example` (liste des variables à renseigner)

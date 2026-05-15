@@ -1,4 +1,11 @@
-FROM ghcr.io/berriai/litellm:main
+FROM python:3.11-slim
 
-COPY litellm-config.yaml /app/hermes-litellm-config.yaml
+RUN pip install --no-cache-dir "litellm[proxy]"
+
+WORKDIR /app
+
 COPY litellm-config.yaml /app/proxy_server_config.yaml
+
+EXPOSE 4000
+
+ENTRYPOINT ["litellm", "--config", "/app/proxy_server_config.yaml", "--host", "0.0.0.0", "--port", "4000"]

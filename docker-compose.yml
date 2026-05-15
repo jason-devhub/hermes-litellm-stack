@@ -33,7 +33,10 @@ services:
       start_period: 45s
 
   hermes:
-    image: nousresearch/hermes-agent:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.hermes
+    image: hermes-agent-local:latest
 
     container_name: hermes-agent
 
@@ -74,7 +77,6 @@ services:
 
     volumes:
       - hermes_data:/opt/data
-      - ./hermes-config.yaml:/opt/data/config.yaml
 
     shm_size: "1gb"
 
