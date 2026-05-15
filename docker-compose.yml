@@ -71,6 +71,10 @@ services:
       # Origines autorisées pour l’UI dans le navigateur (* = dev uniquement ; restreindre derrière Coolify en prod)
       API_SERVER_CORS_ORIGINS: ${HERMES_CORS_ORIGINS:-*}
 
+      # Même UID que l’image Hermes Workspace (user « workspace », uid 10010) pour le volume partagé
+      HERMES_UID: "${HERMES_UID:-10010}"
+      HERMES_GID: "${HERMES_GID:-10010}"
+
       # Dashboard Hermes (sessions, skills, jobs) — requis par Hermes Workspace
       HERMES_DASHBOARD: "1"
       HERMES_DASHBOARD_HOST: "${HERMES_DASHBOARD_HOST:-0.0.0.0}"

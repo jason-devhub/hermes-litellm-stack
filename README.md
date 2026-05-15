@@ -97,6 +97,7 @@ Variables utilisées :
 | `HERMES_API_SERVER_PORT` | Optionnel : port dans le conteneur (défaut `8642` ; adapte aussi `HERMES_PUBLISH_PORT` si tu changes le mapping) |
 | `HERMES_PUBLISH_PORT` | Optionnel : port exposé sur l’hôte (défaut = port conteneur) |
 | `HERMES_CORS_ORIGINS` | Optionnel : origines CORS pour l’UI (ex. `https://hermes.tondomaine.net`). Défaut `*` (pratique en dev, à resserrer en prod) |
+| `HERMES_UID` / `HERMES_GID` | Optionnel : propriétaire du volume partagé (défaut **10010**, aligné sur Hermes Workspace) |
 | `HERMES_PASSWORD` | **Obligatoire** : mot de passe de session Hermes Workspace (l’UI refuse de démarrer sur `0.0.0.0` sans secret) |
 | `HERMES_WORKSPACE_COOKIE_SECURE` | Optionnel : cookies Secure derrière HTTPS (défaut `1` ; mets `0` si accès HTTP LAN sans TLS) |
 | `HERMES_WORKSPACE_TRUST_PROXY` | Optionnel : faire confiance à `X-Forwarded-*` derrière Coolify/Traefik (défaut `1`) |
@@ -193,6 +194,15 @@ Vérification rapide :
 docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8642/health').read())"
 docker compose exec hermes python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9119/api/status').read())"
 ```
+
+**Erreur `EACCES` sur `/home/workspace/.hermes/config.yaml` :** l’agent et le workspace partagent le volume `hermes_data`. L’UI tourne en UID **10010** ; sans `HERMES_UID=10010`, l’agent écrit en **10000** et le workspace ne peut pas modifier la config. Ce dépôt fixe `HERMES_UID` / `HERMES_GID` à `10010` sur le service `hermes`. Après mise à jour, redémarre pour que l’entrypoint refasse le `chown` du volume :
+
+```bash
+docker compose up -d --force-recreate hermes
+docker compose restart hermes-workspace
+```
+
+Si l’erreur persiste : `docker compose exec -u root hermes chown -R 10010:10010 /opt/data`
 
 ---
 
