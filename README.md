@@ -170,10 +170,14 @@ Open WebUI garde son authentification native (`WEBUI_AUTH=true` par défaut). He
 
 La connexion Hermes est préconfigurée côté Open WebUI avec :
 
+- `ENABLE_OPENAI_API=true`
+- `OPENAI_API_BASE_URL=http://hermes:8642/v1`
 - `OPENAI_API_BASE_URLS=http://hermes:8642/v1`
+- `OPENAI_API_KEY=${HERMES_API_SERVER_KEY}`
 - `OPENAI_API_KEYS=${HERMES_API_SERVER_KEY}` (ou `OPENWEBUI_OPENAI_API_KEYS` si tu veux surcharger)
+- `DEFAULT_MODELS=hermes-agent`
 
-Open WebUI persiste sa configuration dans le volume `open_webui_data`. Après le premier démarrage, certaines valeurs modifiées dans l’admin UI peuvent primer sur les variables d’environnement.
+Open WebUI persiste sa configuration dans le volume `open_webui_data`. Après le premier démarrage, certaines valeurs modifiées dans l’admin UI peuvent primer sur les variables d’environnement. Si l’UI « réfléchit » mais que les logs Hermes restent vides, vérifie dans **Admin Panel → Settings → Connections** que l’URL est `http://hermes:8642/v1` et que la clé API est exactement `HERMES_API_SERVER_KEY`. En cas de premier démarrage raté, corrige via l’admin UI ou recrée le volume `open_webui_data` si tu peux perdre les comptes/chats.
 
 ---
 

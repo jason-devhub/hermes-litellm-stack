@@ -87,7 +87,9 @@ services:
       start_period: 180s
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    # Si GHCR renvoie "denied" sur une image publique, lance `docker logout ghcr.io`
+    # ou surcharge avec OPENWEBUI_IMAGE=openwebui/open-webui:latest.
+    image: ${OPENWEBUI_IMAGE:-ghcr.io/open-webui/open-webui:main}
 
     container_name: open-webui
 
@@ -105,7 +107,11 @@ services:
       WEBUI_NAME: ${OPENWEBUI_NAME:-Hermes Agent}
       WEBUI_AUTH: "${OPENWEBUI_AUTH:-true}"
       WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:-}
+      ENABLE_OPENAI_API: "${OPENWEBUI_ENABLE_OPENAI_API:-true}"
+      DEFAULT_MODELS: ${OPENWEBUI_DEFAULT_MODELS:-hermes-agent}
+      OPENAI_API_BASE_URL: ${OPENWEBUI_OPENAI_API_BASE_URL:-http://hermes:8642/v1}
       OPENAI_API_BASE_URLS: ${OPENWEBUI_OPENAI_API_BASE_URLS:-http://hermes:8642/v1}
+      OPENAI_API_KEY: ${OPENWEBUI_OPENAI_API_KEY:-${HERMES_API_SERVER_KEY:-}}
       OPENAI_API_KEYS: ${OPENWEBUI_OPENAI_API_KEYS:-${HERMES_API_SERVER_KEY:-}}
 
     volumes:
