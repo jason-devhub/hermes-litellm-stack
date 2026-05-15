@@ -181,6 +181,8 @@ Ce que tu peux faire, par ordre de robustesse :
 
 - **TLS (HTTPS)** — En rattachant un **domaine** (sous-domaine) à ton application dans Coolify, le proxy (Traefik / stack Coolify) obtient en général un certificat **Let’s Encrypt** automatiquement. Hermes derrière le proxy peut rester en HTTP interne ; ce n’est pas lui qui gère le certificat.
 
+- **Port interne Hermes** — L’URL publique reste bien `https://hermes.example.com` sans `:8642`. Le port `8642` est seulement le port **interne conteneur** vers lequel Coolify/Traefik route le trafic. `Dockerfile.hermes` déclare donc `EXPOSE 8642` pour que Coolify sache quel backend utiliser dans une stack Docker Compose.
+
 - **Authentification « devant » Hermes** — Le plus courant est de la mettre **au proxy**, pas dans Hermes lui-même :
 
   1. **[Basic Auth (Traefik)](https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth)** — Ce dépôt inclut déjà des **labels** sur le service **`hermes`** dans `docker-compose.yml` ([section *Docker Compose And Services*](https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth#docker-compose-and-services)) : middleware `hermes-basicauth` + raccourci **`coolify.traefik.middlewares=hermes-basicauth`** pour l’injecter dans la chaîne du routeur Coolify. Renseigne **`HERMES_BASIC_AUTH_USERS`** dans l’onglet **Environment** (valeur = sortie de `htpasswd -nbB user pass`, une ligne `user:hash`). Dans un fichier `.env`, **double chaque `$`** du hash (`$` → `$$`) pour éviter que Compose ne les mange. Si tu ne veux pas Basic Auth, **commente le bloc `labels:`** du service `hermes` avant de déployer (sinon une variable vide peut poser problème côté Traefik). Voir aussi la doc Coolify sur les caractères spéciaux dans les labels.
