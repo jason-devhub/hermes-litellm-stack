@@ -101,12 +101,6 @@ services:
     expose:
       - "8080"
 
-    # Basic Auth devant l'interface publique Open WebUI (Coolify / Traefik).
-    # https://coolify.io/docs/knowledge-base/proxy/traefik/basic-auth#docker-compose-and-services
-    labels:
-      - "traefik.http.middlewares.openwebui-basicauth.basicauth.users=${OPENWEBUI_BASIC_AUTH_USERS:?Définis OPENWEBUI_BASIC_AUTH_USERS pour protéger Open WebUI}"
-      - "coolify.traefik.middlewares=openwebui-basicauth"
-
     environment:
       WEBUI_NAME: ${OPENWEBUI_NAME:-Hermes Agent}
       WEBUI_AUTH: "${OPENWEBUI_AUTH:-true}"
