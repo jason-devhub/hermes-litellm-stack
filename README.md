@@ -107,8 +107,7 @@ Variables utilisées :
 | `HERMES_CORS_ORIGINS` | Optionnel : origines CORS pour l’UI (ex. `https://hermes.tondomaine.net`). Défaut `*` (pratique en dev, à resserrer en prod) |
 | `HERMES_UID` / `HERMES_GID` | Optionnel : propriétaire du volume partagé (défaut **10010**, aligné sur Hermes Workspace) |
 | `HERMES_PASSWORD` | **Obligatoire** : mot de passe de session Hermes Workspace (l’UI refuse de démarrer sur `0.0.0.0` sans secret) |
-| `HERMES_WORKSPACE_COOKIE_SECURE` | Défaut **`0`** dans `docker-compose.yml` ; mets **`1`** + `TRUST_PROXY=1` derrière **Coolify/HTTPS** |
-| `HERMES_WORKSPACE_TRUST_PROXY` | `1` uniquement derrière un reverse proxy de confiance (Coolify, Traefik) |
+| `HERMES_WORKSPACE_COOKIE_SECURE` | Défaut **`0`** (déjà dans `docker-compose.yml`) — ne touche pas sauf besoin précis |
 
 En local, copie le modèle puis renseigne les valeurs :
 
@@ -126,7 +125,7 @@ Exemple minimal `.env` pour Hermes Workspace :
 NVIDIA_API_KEY=nvapi-...
 HERMES_API_SERVER_KEY=...          # openssl rand -hex 32
 HERMES_PASSWORD=...                # mot de passe UI Workspace
-HERMES_WORKSPACE_COOKIE_SECURE=0   # 0 en http:// LAN ; 1 derrière Coolify HTTPS
+# HERMES_WORKSPACE_COOKIE_SECURE=0   # déjà le défaut du compose
 ```
 
 ## Déploiement Coolify
@@ -241,32 +240,17 @@ Si `enhanced` est vide ou le mode retombe en « portable », le dashboard (`:911
 
 ## Cookies et login (`plain-HTTP LAN`, erreur 500)
 
-L’image Workspace tourne avec `NODE_ENV=production`. Dans ce mode, les cookies de session peuvent avoir le flag **Secure**. Sur une URL en **`http://`** (IP du VPS, `:3000`, LAN sans TLS), le navigateur **refuse** ces cookies → connexion impossible, parfois une **Internal Server Error** générique.
+En `http://`, les cookies « Secure » ne passent pas → login cassé. **`docker-compose.yml` impose déjà `COOKIE_SECURE=0`** : tu n’as normalement **rien** à ajouter dans le `.env`.
 
-Le log ressemble à :
-
-```
-[workspace] warning: plain-HTTP LAN deployment detected.
-  Browsers silently drop Secure cookies over http://, so login will fail.
-  Add COOKIE_SECURE=0 to your .env to fix this.
-```
-
-**Que faire selon ton accès :**
-
-| Comment tu ouvres l’UI | Variables à définir (Coolify / `.env`) |
-| --- | --- |
-| `http://IP` ou `http://…:3000` (sans TLS) | `HERMES_WORKSPACE_COOKIE_SECURE=0` |
-| `https://chat.tondomaine.com` via Coolify / Traefik | `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1` |
-
-Par défaut, `docker-compose.yml` envoie **`COOKIE_SECURE=0`** au workspace (login OK en `http://`). Pour Coolify en HTTPS, surcharge avec `HERMES_WORKSPACE_COOKIE_SECURE=1` et `HERMES_WORKSPACE_TRUST_PROXY=1`.
-
-Après changement :
+Si tu vois encore le warning ou un login qui échoue après un déploiement :
 
 ```bash
 docker compose up -d --force-recreate hermes-workspace
 ```
 
-Pense à vider les cookies du site ou utiliser une fenêtre privée.
+Puis fenêtre privée ou cookies du site effacés.
+
+*(Le `TRUST_PROXY` dont on parlait avant sert à autre chose — IP derrière un reverse proxy — et n’a **pas** de rapport avec ce bug de cookies. Il n’est pas dans notre compose.)*
 
 ## Avertissement `CLAUDE_DASHBOARD_TOKEN`
 
@@ -356,7 +340,7 @@ Ce que tu peux faire, par ordre de robustesse :
 
 - **Authentification Workspace** — Définis **`HERMES_PASSWORD`** (session UI). En complément, **`HERMES_API_SERVER_KEY`** protège le gateway Hermes (Bearer).
 
-- **Cookies** — Voir [Dépannage → Cookies et login](#cookies-et-login-plain-http-lan-erreur-500).
+- **Cookies** — Défaut `COOKIE_SECURE=0` dans le compose ; voir [dépannage](#cookies-et-login-plain-http-lan-erreur-500) si le login bloque encore.
 
 - **SSO / OAuth optionnel** — Tu peux ajouter une couche devant le workspace (Authentik, Authelia, Cloudflare Access) en plus du mot de passe Workspace.
 
